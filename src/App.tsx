@@ -10,6 +10,7 @@ import MenuItem from '@material-ui/core/MenuItem';
 
 import './App.css';
 import Grid1 from './components/Grid1';
+import Grid1b from './components/Grid1b';
 import Grid2 from './components/Grid2';
 import Grid3 from './components/Grid3';
 
@@ -49,16 +50,24 @@ export const App = (props: Props) => {
                 setSample(
                     <>
                         <Grid1 />
-                        <Grid2 />
+                        <Grid1b />
                     </>,
                 );
                 break;
             case 2:
                 setSample(
                     <>
+                        <Grid2 />
+                    </>,
+                );
+                break;
+            case 3:
+                setSample(
+                    <>
                         <Grid3 />
                     </>,
                 );
+                break;
             default:
                 break;
         }
@@ -69,7 +78,7 @@ export const App = (props: Props) => {
         setSample(
             <>
                 <Grid1 />
-                <Grid2 />
+                <Grid1b />
             </>,
         );
         return () => {};
@@ -83,6 +92,9 @@ export const App = (props: Props) => {
                 </MenuItem>
                 <MenuItem id="s2" data-sample="2" onClick={handleClose}>
                     2 Grouping and Aggregators
+                </MenuItem>
+                <MenuItem id="s3" data-sample="3" onClick={handleClose}>
+                    3 Draggable Grouping
                 </MenuItem>
             </Menu>
             <AppBar position="static">

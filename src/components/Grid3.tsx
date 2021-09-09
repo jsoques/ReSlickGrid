@@ -9,23 +9,38 @@ import {
     Aggregators,
     BindingEventService,
     Column,
+    Editors,
     FieldType,
-    Filters,
     FileType,
+    Filters,
     Formatters,
     GridOption,
     Grouping,
+    GroupingGetterFunction,
     GroupTotalFormatters,
+    SlickDraggableGrouping,
+    SlickNamespace,
     SortComparers,
     SortDirectionNumber,
 } from '@slickgrid-universal/common';
 import { ExcelExportService } from '@slickgrid-universal/excel-export';
-import { TextExportService } from '@slickgrid-universal/text-export';
 import { Slicker, SlickVanillaGridBundle } from '@slickgrid-universal/vanilla-bundle';
 
 import { ExampleGridOptions } from './example-grid-options';
-import './material-styles.scss';
-import './example02.scss';
+import './salesforce-styles.scss';
+import './example03.scss';
+
+const Slick: SlickNamespace = undefined;
+
+interface ReportItem {
+    title: string;
+    duration: number;
+    cost: number;
+    percentComplete: number;
+    start: Date;
+    finish: Date;
+    effortDriven: boolean;
+}
 
 interface Props {}
 interface State {}
@@ -33,36 +48,42 @@ interface State {}
 export default class Grid3 extends Component<Props, State> {
     state = {};
 
-    NB_ITEMS = 500;
-
     private _bindingEventService: BindingEventService = new BindingEventService();
-    columnDefinitions: Column[];
+    columnDefinitions: Column<ReportItem & { action: string }>[];
     gridOptions: GridOption;
     dataset: any[];
-    commandQueue = [];
-    sgb: SlickVanillaGridBundle;
+    editCommandQueue = [];
     excelExportService: ExcelExportService = new ExcelExportService();
+    sgb: SlickVanillaGridBundle;
+    durationOrderByCount: Boolean = false;
+    draggableGroupingPlugin: SlickDraggableGrouping;
+    loadingClass = '';
+    selectedGroupingFields: Array<string | GroupingGetterFunction> = ['', '', ''];
 
-    loadData = (rowCount: number) => {
+    loadData = (count: number) => {
+        // mock data
         const tmpArray = [];
-        for (let i = 0; i < rowCount; i++) {
+        for (let i = 0; i < count; i++) {
             const randomYear = 2000 + Math.floor(Math.random() * 10);
+            const randomFinishYear = new Date().getFullYear() - 3 + Math.floor(Math.random() * 10); // use only years not lower than 3 years ago
             const randomMonth = Math.floor(Math.random() * 11);
             const randomDay = Math.floor(Math.random() * 29);
-            const randomPercent = Math.round(Math.random() * 100);
+            const randomFinish = new Date(randomFinishYear, randomMonth + 1, randomDay);
 
             tmpArray[i] = {
-                id: 'id_' + i,
-                num: i,
+                id: i,
                 title: 'Task ' + i,
                 duration: Math.round(Math.random() * 100) + '',
-                percentComplete: randomPercent,
-                percentCompleteNumber: randomPercent,
+                percentComplete: Math.round(Math.random() * 100),
                 start: new Date(randomYear, randomMonth, randomDay),
-                finish: new Date(randomYear, randomMonth + 1, randomDay),
+                finish: randomFinish < new Date() ? '' : randomFinish, // make sure the random date is earlier than today
                 cost: i % 33 === 0 ? null : Math.round(Math.random() * 10000) / 100,
                 effortDriven: i % 5 === 0,
             };
+
+            // if (i % 8) {
+            //   delete tmpArray[i].duration; // test with undefined properties
+            // }
         }
         if (this.sgb) {
             this.sgb.dataset = tmpArray;
@@ -73,155 +94,321 @@ export default class Grid3 extends Component<Props, State> {
     initializeGrid() {
         this.columnDefinitions = [
             {
-                id: 'sel',
-                name: '#',
-                field: 'num',
-                width: 40,
-                excludeFromExport: true,
-                maxWidth: 70,
-                resizable: true,
-                filterable: true,
-                selectable: false,
-                focusable: false,
-            },
-            {
                 id: 'title',
                 name: 'Title',
                 field: 'title',
-                width: 50,
-                minWidth: 50,
-                cssClass: 'cell-title',
-                filterable: true,
                 sortable: true,
+                type: FieldType.string,
+                editor: {
+                    model: Editors.longText,
+                    required: true,
+                    alwaysSaveOnEnterKey: true,
+                    minLength: 5,
+                    maxLength: 255,
+                },
+                filterable: true,
+                grouping: {
+                    getter: 'title',
+                    formatter: (g) => `Title: ${g.value} <span style="color:green">(${g.count} items)</span>`,
+                    aggregators: [new Aggregators.Sum('cost')],
+                    aggregateCollapsed: false,
+                    collapsed: false,
+                },
             },
             {
                 id: 'duration',
                 name: 'Duration',
                 field: 'duration',
-                minWidth: 50,
-                width: 60,
-                filterable: true,
-                filter: { model: Filters.slider, operator: '>=' },
                 sortable: true,
+                filterable: true,
+                editor: {
+                    model: Editors.float,
+                    // required: true,
+                    decimal: 2,
+                    valueStep: 1,
+                    maxValue: 10000,
+                    alwaysSaveOnEnterKey: true,
+                },
                 type: FieldType.number,
                 groupTotalsFormatter: GroupTotalFormatters.sumTotals,
-                params: { groupFormatterPrefix: 'Total: ' },
+                grouping: {
+                    getter: 'duration',
+                    formatter: (g) => `Duration: ${g.value} <span style="color:green">(${g.count} items)</span>`,
+                    comparer: (a, b) => {
+                        return this.durationOrderByCount
+                            ? a.count - b.count
+                            : SortComparers.numeric(a.value, b.value, SortDirectionNumber.asc);
+                    },
+                    aggregators: [new Aggregators.Sum('cost')],
+                    aggregateCollapsed: false,
+                    collapsed: false,
+                },
+            },
+            {
+                id: 'cost',
+                name: 'Cost',
+                field: 'cost',
+                width: 90,
+                sortable: true,
+                filterable: true,
+                // filter: { model: Filters.compoundInput },
+                // formatter: Formatters.dollar,
+                formatter: Formatters.dollar,
+                groupTotalsFormatter: GroupTotalFormatters.sumTotalsDollar,
+                type: FieldType.number,
+                grouping: {
+                    getter: 'cost',
+                    formatter: (g) => `Cost: ${g.value} <span style="color:green">(${g.count} items)</span>`,
+                    aggregators: [new Aggregators.Sum('cost')],
+                    aggregateCollapsed: true,
+                    collapsed: true,
+                },
             },
             {
                 id: 'percentComplete',
                 name: '% Complete',
                 field: 'percentComplete',
-                minWidth: 70,
-                width: 90,
-                formatter: Formatters.percentCompleteBar,
-                filterable: true,
-                filter: { model: Filters.compoundSlider },
-                sortable: true,
                 type: FieldType.number,
+                editor: {
+                    model: Editors.slider,
+                    minValue: 0,
+                    maxValue: 100,
+                    // params: { hideSliderNumber: true },
+                },
+                sortable: true,
+                filterable: true,
+                filter: { model: Filters.slider, operator: '>=' },
                 groupTotalsFormatter: GroupTotalFormatters.avgTotalsPercentage,
+                grouping: {
+                    getter: 'percentComplete',
+                    formatter: (g) => `% Complete:  ${g.value} <span style="color:green">(${g.count} items)</span>`,
+                    aggregators: [new Aggregators.Sum('cost')],
+                    aggregateCollapsed: false,
+                    collapsed: false,
+                },
                 params: { groupFormatterPrefix: '<i>Avg</i>: ' },
             },
             {
                 id: 'start',
                 name: 'Start',
                 field: 'start',
-                minWidth: 60,
-                maxWidth: 130,
+                sortable: true,
+                // formatter: Formatters.dateIso,
+                type: FieldType.date,
+                outputType: FieldType.dateIso,
                 filterable: true,
                 filter: { model: Filters.compoundDate },
-                sortable: true,
-                type: FieldType.dateIso,
                 formatter: Formatters.dateIso,
-                exportWithFormatter: true,
+                editor: { model: Editors.date },
+                grouping: {
+                    getter: 'start',
+                    formatter: (g) => `Start: ${g.value} <span style="color:green">(${g.count} items)</span>`,
+                    aggregators: [new Aggregators.Sum('cost')],
+                    aggregateCollapsed: false,
+                    collapsed: false,
+                },
             },
             {
                 id: 'finish',
                 name: 'Finish',
                 field: 'finish',
-                minWidth: 60,
-                maxWidth: 130,
-                filterable: true,
-                filter: { model: Filters.compoundDate },
                 sortable: true,
-                type: FieldType.dateIso,
+                editor: { model: Editors.date, editorOptions: { minDate: 'today' } },
+                // formatter: Formatters.dateIso,
+                type: FieldType.date,
+                outputType: FieldType.dateIso,
                 formatter: Formatters.dateIso,
-                exportWithFormatter: true,
-            },
-            {
-                id: 'cost',
-                name: 'Cost',
-                field: 'cost',
-                minWidth: 70,
-                width: 80,
-                maxWidth: 120,
                 filterable: true,
-                filter: { model: Filters.compoundInputNumber },
-                type: FieldType.number,
-                sortable: true,
-                exportWithFormatter: true,
-                formatter: Formatters.dollar,
-                groupTotalsFormatter: GroupTotalFormatters.sumTotalsDollar,
-                params: { groupFormatterPrefix: '<b>Total</b>: ' /* , groupFormatterSuffix: ' USD' */ },
+                filter: { model: Filters.dateRange },
+                grouping: {
+                    getter: 'finish',
+                    formatter: (g) => `Finish: ${g.value} <span style="color:green">(${g.count} items)</span>`,
+                    aggregators: [new Aggregators.Sum('cost')],
+                    aggregateCollapsed: false,
+                    collapsed: false,
+                },
             },
             {
                 id: 'effortDriven',
                 name: 'Effort Driven',
-                minWidth: 30,
-                width: 80,
-                maxWidth: 90,
-                cssClass: 'cell-effort-driven',
                 field: 'effortDriven',
-                formatter: Formatters.checkmarkMaterial,
+                width: 80,
+                minWidth: 20,
+                maxWidth: 100,
+                cssClass: 'cell-effort-driven',
                 sortable: true,
                 filterable: true,
                 filter: {
-                    model: Filters.singleSelect,
-
-                    // pass a regular collection array with value/label pairs
                     collection: [
                         { value: '', label: '' },
                         { value: true, label: 'True' },
                         { value: false, label: 'False' },
                     ],
+                    model: Filters.singleSelect,
+                },
+                exportWithFormatter: false,
+                formatter: Formatters.checkmarkMaterial,
+                grouping: {
+                    getter: 'effortDriven',
+                    formatter: (g) =>
+                        `Effort-Driven: ${g.value ? 'True' : 'False'} <span style="color:green">(${
+                            g.count
+                        } items)</span>`,
+                    aggregators: [new Aggregators.Sum('cost')],
+                    collapsed: false,
+                },
+            },
+            {
+                id: 'action',
+                name: 'Action',
+                field: 'action',
+                width: 100,
+                maxWidth: 100,
+                excludeFromExport: true,
+                formatter: () => {
+                    return `<div class="fake-hyperlink">Action <span class="font-12px">&#9660;</span></div>`;
+                },
+                cellMenu: {
+                    hideCloseButton: false,
+                    width: 175,
+                    // you can override the logic of when the menu is usable
+                    // for example say that we want to show a menu only when then Priority is set to 'High'.
+                    // Note that this ONLY overrides the usability itself NOT the text displayed in the cell,
+                    // if you wish to change the cell text (or hide it)
+                    // then you SHOULD use it in combination with a custom formatter (actionFormatter) and use the same logic in that formatter
+                    // menuUsabilityOverride: (args) => {
+                    //   return (args.dataContext.priority === 3); // option 3 is High
+                    // },
 
-                    // Select Filters can also support collection that are async, it could be a Promise (shown below) or Fetch result
-                    // collectionAsync: new Promise<any>(resolve => setTimeout(() => {
-                    //   resolve([{ value: '', label: '' }, { value: true, label: 'True' }, { value: false, label: 'False' }]);
-                    // }, 250)),
+                    commandTitle: 'Commands',
+                    commandItems: [
+                        // array of command item objects, you can also use the "positionOrder" that will be used to sort the items in the list
+                        {
+                            command: 'command2',
+                            title: 'Command 2',
+                            positionOrder: 62,
+                            // you can use the "action" callback and/or use "onCallback" callback from the grid options, they both have the same arguments
+                            action: (_e, args) => {
+                                console.log(args.dataContext, args.column);
+                                // action callback.. do something
+                            },
+                            // only enable command when the task is not completed
+                            itemUsabilityOverride: (args) => {
+                                return !args.dataContext.completed;
+                            },
+                        },
+                        { command: 'command1', title: 'Command 1', cssClass: 'orange', positionOrder: 61 },
+                        {
+                            command: 'delete-row',
+                            title: 'Delete Row',
+                            positionOrder: 64,
+                            iconCssClass: 'mdi mdi-close',
+                            cssClass: 'red',
+                            textCssClass: 'bold',
+                            // only show command to 'Delete Row' when the task is not completed
+                            itemVisibilityOverride: (args) => {
+                                return !args.dataContext.completed;
+                            },
+                        },
+                        // you can pass divider as a string or an object with a boolean (if sorting by position, then use the object)
+                        // note you should use the "divider" string only when items array is already sorted and positionOrder are not specified
+                        { divider: true, command: '', positionOrder: 63 },
+                        // 'divider',
+
+                        {
+                            command: 'help',
+                            title: 'Help',
+                            iconCssClass: 'mdi mdi-help-circle-outline',
+                            positionOrder: 66,
+                        },
+                        { command: 'something', title: 'Disabled Command', disabled: true, positionOrder: 67 },
+                    ],
+                    optionTitle: 'Change Complete Flag',
+                    optionItems: [
+                        { option: true, title: 'True', iconCssClass: 'mdi mdi-check-box-outline' },
+                        { option: false, title: 'False', iconCssClass: 'mdi mdi-checkbox-blank-outline' },
+                    ],
                 },
             },
         ];
 
         this.gridOptions = {
+            autoEdit: true, // true single click (false for double-click)
+            autoCommitEdit: true,
+            editable: true,
             autoResize: {
                 container: '.demo-container',
-                bottomPadding: 30,
-                rightPadding: 10,
             },
-            enableTextExport: true,
-            enableFiltering: true,
-            enableGrouping: true,
-            exportOptions: {
-                sanitizeDataExport: true,
-            },
+            enableAutoSizeColumns: true,
+            enableAutoResize: true,
+            enableCellNavigation: true,
             enableExcelExport: true,
-            excelExportOptions: { filename: 'my-export', sanitizeDataExport: true },
-            textExportOptions: { filename: 'my-export', sanitizeDataExport: true },
-            registerExternalResources: [this.excelExportService, new TextExportService()],
-            showCustomFooter: true, // display some metrics in the bottom custom footer
-            customFooterOptions: {
-                // optionally display some text on the left footer container
-                leftFooterText:
-                    'Grid created with <a href="https://github.com/ghiscoding/slickgrid-universal" target="_blank">Slickgrid-Universal</a>',
-                hideMetrics: false,
-                hideTotalItemCount: false,
-                hideLastUpdateTimestamp: false,
+            excelExportOptions: {
+                exportWithFormatter: true,
+            },
+            registerExternalResources: [this.excelExportService],
+            enableFiltering: true,
+            rowSelectionOptions: {
+                // True (Single Selection), False (Multiple Selections)
+                selectActiveRow: false,
+            },
+            showCustomFooter: true,
+            createPreHeaderPanel: true,
+            showPreHeaderPanel: true,
+            preHeaderPanelHeight: 35,
+            rowHeight: 33,
+            headerRowHeight: 35,
+            enableDraggableGrouping: true,
+            draggableGrouping: {
+                dropPlaceHolderText: 'Drop a column header here to group by the column',
+                // groupIconCssClass: 'fa fa-outdent',
+                deleteIconCssClass: 'mdi mdi-close color-danger',
+                onGroupChanged: (_e, args) => this.onGroupChanged(args),
+                onExtensionRegistered: (extension) => (this.draggableGroupingPlugin = extension),
+            },
+            enableCheckboxSelector: true,
+            enableRowSelection: true,
+            checkboxSelector: {
+                hideInFilterHeaderRow: false,
+                hideInColumnTitleRow: true,
+            },
+            editCommandHandler: (_item, _column, editCommand) => {
+                this.editCommandQueue.push(editCommand);
+                editCommand.execute();
+            },
+            // when using the cellMenu, you can change some of the default options and all use some of the callback methods
+            enableCellMenu: true,
+            cellMenu: {
+                // all the Cell Menu callback methods (except the action callback)
+                // are available under the grid options as shown below
+                onCommand: (e, args) => this.executeCommand(e, args),
+                onOptionSelected: (_e, args) => {
+                    // change "Completed" property with new option selected from the Cell Menu
+                    const dataContext = args && args.dataContext;
+                    if (dataContext && dataContext.hasOwnProperty('completed')) {
+                        dataContext.completed = args.item.option;
+                        this.sgb.gridService.updateItem(dataContext);
+                    }
+                },
             },
         };
     }
 
+    clearGroupsAndSelects = () => {
+        this.clearGroupingSelects();
+        this.clearGrouping();
+    };
+
+    clearGroupingSelects = () => {
+        this.selectedGroupingFields.forEach((_g, i) => (this.selectedGroupingFields[i] = ''));
+        this.selectedGroupingFields = [...this.selectedGroupingFields]; // force dirty checking
+    };
+
     clearGrouping = () => {
-        this.sgb?.dataView.setGrouping([]);
+        if (this.draggableGroupingPlugin && this.draggableGroupingPlugin.setDroppedGroups) {
+            this.draggableGroupingPlugin.clearDroppedGroups();
+        }
+        this.sgb?.slickGrid.invalidate(); //
     };
 
     collapseAllGroups = () => {
@@ -233,123 +420,159 @@ export default class Grid3 extends Component<Props, State> {
     };
 
     exportToExcel = () => {
-        this.excelExportService.exportToExcel({ filename: 'export', format: FileType.xlsx });
+        this.excelExportService.exportToExcel({
+            filename: 'Export',
+            format: FileType.xlsx,
+        });
+    };
+
+    showPreHeader = () => {
+        this.sgb?.slickGrid.setPreHeaderPanelVisibility(true);
     };
 
     groupByDuration = () => {
-        this.sgb?.dataView.setGrouping({
-            getter: 'duration',
-            formatter: (g) => `Duration: ${g.value} <span style="color:green">(${g.count} items)</span>`,
-            comparer: (a, b) => SortComparers.numeric(a.value, b.value, SortDirectionNumber.asc),
-            aggregators: [new Aggregators.Avg('percentComplete'), new Aggregators.Sum('cost')],
-            aggregateCollapsed: false,
-            lazyTotalsCalculation: true,
-        } as Grouping);
-
-        // you need to manually add the sort icon(s) in UI
-        this.sgb?.slickGrid.setSortColumns([{ columnId: 'duration', sortAsc: true }]);
-        this.sgb?.slickGrid.invalidate(); // invalidate all rows and re-render
+        this.clearGrouping();
+        if (this.draggableGroupingPlugin && this.draggableGroupingPlugin.setDroppedGroups) {
+            this.showPreHeader();
+            this.draggableGroupingPlugin.setDroppedGroups('duration');
+            this.sgb?.slickGrid.invalidate(); // invalidate all rows and re-render
+        }
     };
 
-    groupByDurationOrderByCount = (aggregateCollapsed: Boolean) => {
-        this.sgb?.slickGrid.setSortColumns([]);
-        this.sgb?.dataView.setGrouping({
-            getter: 'duration',
-            formatter: (g) => `Duration: ${g.value} <span style="color:green">(${g.count} items)</span>`,
-            comparer: (a, b) => a.count - b.count,
-            aggregators: [new Aggregators.Avg('percentComplete'), new Aggregators.Sum('cost')],
-            aggregateCollapsed,
-            lazyTotalsCalculation: true,
-        } as unknown as Grouping);
-        this.sgb?.slickGrid.invalidate(); // invalidate all rows and re-render
+    groupByDurationOrderByCount = (sortedByCount: Boolean) => {
+        this.durationOrderByCount = sortedByCount;
+        this.clearGrouping();
+        this.groupByDuration();
+
+        // you need to manually add the sort icon(s) in UI
+        const sortColumns = sortedByCount ? [] : [{ columnId: 'duration', sortAsc: true }];
+        this.sgb?.slickGrid.setSortColumns(sortColumns);
+        this.sgb?.slickGrid.invalidate();
     };
 
     groupByDurationEffortDriven = () => {
-        this.sgb?.slickGrid.setSortColumns([]);
-        this.sgb?.dataView.setGrouping([
-            {
-                getter: 'duration',
-                formatter: (g) => `Duration: ${g.value}  <span style="color:green">(${g.count} items)</span>`,
-                aggregators: [new Aggregators.Sum('duration'), new Aggregators.Sum('cost')],
-                aggregateCollapsed: true,
-                lazyTotalsCalculation: true,
-            },
-            {
-                getter: 'effortDriven',
-                formatter: (g) =>
-                    `Effort-Driven: ${g.value ? 'True' : 'False'} <span style="color:green">(${g.count} items)</span>`,
-                aggregators: [new Aggregators.Avg('percentComplete'), new Aggregators.Sum('cost')],
-                collapsed: true,
-                lazyTotalsCalculation: true,
-            },
-        ] as Grouping[]);
+        this.clearGrouping();
+        if (this.draggableGroupingPlugin && this.draggableGroupingPlugin.setDroppedGroups) {
+            this.showPreHeader();
+            this.draggableGroupingPlugin.setDroppedGroups(['duration', 'effortDriven']);
+            this.sgb?.slickGrid.invalidate(); // invalidate all rows and re-render
 
-        // you need to manually add the sort icon(s) in UI
-        const sortColumns = [
-            { columnId: 'duration', sortAsc: true },
-            { columnId: 'effortDriven', sortAsc: true },
-        ];
-        this.sgb?.slickGrid.setSortColumns(sortColumns);
-        this.sgb?.slickGrid.invalidate(); // invalidate all rows and re-render
+            // you need to manually add the sort icon(s) in UI
+            const sortColumns = [{ columnId: 'duration', sortAsc: true }];
+            this.sgb?.slickGrid.setSortColumns(sortColumns);
+        }
     };
 
-    groupByDurationEffortDrivenPercent = () => {
-        this.sgb?.slickGrid.setSortColumns([]);
-        this.sgb?.dataView.setGrouping([
-            {
-                getter: 'duration',
-                formatter: (g) => `Duration: ${g.value}  <span style="color:green">(${g.count} items)</span>`,
-                aggregators: [new Aggregators.Sum('duration'), new Aggregators.Sum('cost')],
-                aggregateCollapsed: true,
-                lazyTotalsCalculation: true,
-            },
-            {
-                getter: 'effortDriven',
-                formatter: (g) =>
-                    `Effort-Driven: ${g.value ? 'True' : 'False'}  <span style="color:green">(${g.count} items)</span>`,
-                aggregators: [new Aggregators.Sum('duration'), new Aggregators.Sum('cost')],
-                lazyTotalsCalculation: true,
-            },
-            {
-                getter: 'percentComplete',
-                formatter: (g) => `% Complete: ${g.value}  <span style="color:green">(${g.count} items)</span>`,
-                aggregators: [new Aggregators.Avg('percentComplete')],
-                aggregateCollapsed: true,
-                collapsed: true,
-                lazyTotalsCalculation: true,
-            },
-        ] as Grouping[]);
+    groupByFieldName = (_fieldName: any, _index: any) => {
+        this.clearGrouping();
+        if (this.draggableGroupingPlugin && this.draggableGroupingPlugin.setDroppedGroups) {
+            this.showPreHeader();
 
-        // you need to manually add the sort icon(s) in UI
-        const sortColumns = [
-            { columnId: 'duration', sortAsc: true },
-            { columnId: 'effortDriven', sortAsc: true },
-            { columnId: 'percentComplete', sortAsc: true },
-        ];
-        this.sgb?.slickGrid.setSortColumns(sortColumns);
-        this.sgb?.slickGrid.invalidate(); // invalidate all rows and re-render
+            // get the field names from Group By select(s) dropdown, but filter out any empty fields
+            const groupedFields = this.selectedGroupingFields.filter((g) => g !== '');
+            if (groupedFields.length === 0) {
+                this.clearGrouping();
+            } else {
+                this.draggableGroupingPlugin.setDroppedGroups(groupedFields);
+            }
+            this.sgb?.slickGrid.invalidate(); // invalidate all rows and re-render
+        }
+    };
+
+    toggleDraggableGroupingRow = () => {
+        this.clearGroupsAndSelects();
+        this.sgb?.slickGrid.setPreHeaderPanelVisibility(!this.sgb?.slickGrid.getOptions().showPreHeaderPanel);
+    };
+
+    onGroupChanged = (change: { caller?: string; groupColumns: Grouping[] }) => {
+        const caller = (change && change.caller) || [];
+        const groups = (change && change.groupColumns) || [];
+
+        if (Array.isArray(this.selectedGroupingFields) && Array.isArray(groups) && groups.length > 0) {
+            // update all Group By select dropdown
+            this.selectedGroupingFields.forEach(
+                (_g, i) => (this.selectedGroupingFields[i] = (groups[i] && groups[i].getter) || ''),
+            );
+            this.selectedGroupingFields = [...this.selectedGroupingFields]; // force dirty checking
+        } else if (groups.length === 0 && caller === 'remove-group') {
+            this.clearGroupingSelects();
+        }
+    };
+
+    handleOnClick = (event: any) => {
+        console.log('onClick', event.detail);
+    };
+
+    handleOnCellChange = (event: any) => {
+        console.log('onCellChanged', event.detail);
+    };
+
+    handleValidationError = (event: any) => {
+        console.log('handleValidationError', event.detail);
+        const args = event.detail && event.detail.args;
+        if (args.validationResults) {
+            alert(args.validationResults.msg);
+        }
+    };
+
+    handleItemDeleted = (event: any) => {
+        const itemId = event && event.detail;
+        console.log('item deleted with id:', itemId);
+    };
+
+    executeCommand = (_e: any, args: any) => {
+        // const columnDef = args.column;
+        const command = args.command;
+        const dataContext = args.dataContext;
+
+        switch (command) {
+            case 'command1':
+                alert('Command 1');
+                break;
+            case 'command2':
+                alert('Command 2');
+                break;
+            case 'help':
+                alert('Please help!');
+                break;
+            case 'delete-row':
+                if (confirm(`Do you really want to delete row (${args.row + 1}) with "${dataContext.title}"`)) {
+                    this.sgb?.gridService.deleteItemById(dataContext.id);
+                }
+                break;
+        }
+    };
+
+    undo = () => {
+        const command = this.editCommandQueue.pop();
+        if (command && Slick.GlobalEditorLock.cancelCurrentEdit()) {
+            command.undo();
+            this.sgb?.slickGrid.gotoCell(command.row, command.cell, false);
+        }
     };
 
     componentDidMount() {
         this.initializeGrid();
-        this.dataset = this.loadData(this.NB_ITEMS);
-        const gridContainerElm = document.querySelector<HTMLDivElement>(`.grid2`);
+        this.dataset = this.loadData(500);
 
-        this._bindingEventService.bind(gridContainerElm, 'onbeforeexporttoexcel', () =>
-            console.log('onBeforeExportToExcel'),
+        const gridContainerElm = document.querySelector<HTMLDivElement>(`.grid3`);
+
+        this._bindingEventService.bind(gridContainerElm, 'onclick', this.handleOnClick.bind(this));
+        this._bindingEventService.bind(gridContainerElm, 'oncellchange', this.handleOnCellChange.bind(this));
+        this._bindingEventService.bind(gridContainerElm, 'onvalidationerror', this.handleValidationError.bind(this));
+        this._bindingEventService.bind(gridContainerElm, 'onitemdeleted', this.handleItemDeleted.bind(this));
+        this._bindingEventService.bind(
+            gridContainerElm,
+            'onbeforeexporttoexcel',
+            () => (this.loadingClass = 'mdi mdi-load mdi-spin-1s mdi-22px'),
         );
-        this._bindingEventService.bind(gridContainerElm, 'onafterexporttoexcel', () =>
-            console.log('onAfterExportToExcel'),
-        );
+        this._bindingEventService.bind(gridContainerElm, 'onafterexporttoexcel', () => (this.loadingClass = ''));
         this.sgb = new Slicker.GridBundle(
             gridContainerElm,
             this.columnDefinitions,
             { ...ExampleGridOptions, ...this.gridOptions },
             this.dataset,
         );
-
-        // // you could group by duration on page load (must be AFTER the DataView is created, so after GridBundle)
-        // // this.groupByDuration();
     }
 
     componentWillUnmount() {
@@ -361,12 +584,11 @@ export default class Grid3 extends Component<Props, State> {
         return (
             <div>
                 <h3 className="gridtitle is-3">
-                    Example 02 - Grouping &amp; Aggregators
-                    <span className="subtitle">(with Material Theme)</span>
+                    Example 03 - Draggable Grouping
+                    <span className="subtitle">(with Salesforce Theme)</span>
                 </h3>
-
                 <section>
-                    <div className="row" style={{ marginBottom: '4px' }}>
+                    <div className="row">
                         <button
                             className="button is-small"
                             data-test="add-500-rows-btn"
@@ -426,34 +648,24 @@ export default class Grid3 extends Component<Props, State> {
                             <span>Export to Excel</span>
                         </button>
                     </div>
-
-                    <div className="row">
+                    <div className="row" style={{ marginTop: '4px' }}>
                         <button
                             className="button is-small"
                             data-test="group-duration-sort-value-btn"
                             onClick={() => {
-                                this.groupByDuration();
+                                this.groupByDurationOrderByCount(false);
                             }}
                         >
-                            Group by Duration &amp; sort groups by value
+                            Group by duration &amp; sort groups by value
                         </button>
                         <button
                             className="button is-small"
                             data-test="group-duration-sort-count-btn"
                             onClick={() => {
-                                this.groupByDurationOrderByCount(false);
-                            }}
-                        >
-                            Group by Duration &amp; sort groups by count
-                        </button>
-                        <button
-                            className="button is-small"
-                            data-test="group-duration-sort-count-collapse-btn"
-                            onClick={() => {
                                 this.groupByDurationOrderByCount(true);
                             }}
                         >
-                            Group by Duration &amp; sort groups by count, aggregate collapsed
+                            Group by duration &amp; sort groups by count
                         </button>
                         <button
                             className="button is-small"
@@ -464,20 +676,11 @@ export default class Grid3 extends Component<Props, State> {
                         >
                             Group by Duration then Effort-Driven
                         </button>
-                        <button
-                            className="button is-small"
-                            data-test="group-duration-effort-percent-btn"
-                            onClick={() => {
-                                this.groupByDurationEffortDrivenPercent();
-                            }}
-                        >
-                            Group by Duration then Effort-Driven then Percent.
-                        </button>
                     </div>
                 </section>
                 <br />
 
-                <div className="grid2"></div>
+                <div className="grid3"></div>
             </div>
         );
     }
