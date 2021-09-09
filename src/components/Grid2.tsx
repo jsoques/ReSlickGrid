@@ -46,7 +46,7 @@ export default class Grid2 extends Component<Props, State> {
     loadData = (rowCount: number) => {
         const tmpArray = [];
         for (let i = 0; i < rowCount; i++) {
-            const randomYear = 2000 + Math.floor(Math.random() * 10);
+            const randomYear = 2010 + Math.floor(Math.random() * 10);
             const randomMonth = Math.floor(Math.random() * 11);
             const randomDay = Math.floor(Math.random() * 29);
             const randomPercent = Math.round(Math.random() * 100);
@@ -360,7 +360,7 @@ export default class Grid2 extends Component<Props, State> {
     render() {
         return (
             <div>
-                <h3 className="gridtitle is-3">
+                <h3 className="gridtitle is-3" style={{ marginLeft: '16px'}}>
                     Example 02 - Grouping &amp; Aggregators
                     <span className="subtitle">(with Material Theme)</span>
                 </h3>

@@ -64,7 +64,7 @@ export default class Grid3 extends Component<Props, State> {
         // mock data
         const tmpArray = [];
         for (let i = 0; i < count; i++) {
-            const randomYear = 2000 + Math.floor(Math.random() * 10);
+            const randomYear = 2010 + Math.floor(Math.random() * 10);
             const randomFinishYear = new Date().getFullYear() - 3 + Math.floor(Math.random() * 10); // use only years not lower than 3 years ago
             const randomMonth = Math.floor(Math.random() * 11);
             const randomDay = Math.floor(Math.random() * 29);
@@ -583,7 +583,7 @@ export default class Grid3 extends Component<Props, State> {
     render() {
         return (
             <div>
-                <h3 className="gridtitle is-3">
+                <h3 className="gridtitle is-3" style={{ marginLeft: '16px'}}>
                     Example 03 - Draggable Grouping
                     <span className="subtitle">(with Salesforce Theme)</span>
                 </h3>

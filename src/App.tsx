@@ -13,6 +13,7 @@ import Grid1 from './components/Grid1';
 import Grid1b from './components/Grid1b';
 import Grid2 from './components/Grid2';
 import Grid3 from './components/Grid3';
+import Grid4 from './components/Grid4';
 
 const useStyles = makeStyles((theme: Theme) =>
     createStyles({
@@ -49,6 +50,9 @@ export const App = (props: Props) => {
             case 1:
                 setSample(
                     <>
+                        <h3 className="gridtitle is-3" style={{ marginLeft: '16px' }}>
+                            Example 01 - Basic Grids
+                        </h3>
                         <Grid1 />
                         <Grid1b />
                     </>,
@@ -68,6 +72,13 @@ export const App = (props: Props) => {
                     </>,
                 );
                 break;
+            case 4:
+                setSample(
+                    <>
+                        <Grid4 />
+                    </>,
+                );
+                break;
             default:
                 break;
         }
@@ -77,6 +88,9 @@ export const App = (props: Props) => {
     useEffect(() => {
         setSample(
             <>
+                <h3 className="gridtitle is-3" style={{ marginLeft: '16px' }}>
+                    Example 01 - Basic Grids
+                </h3>
                 <Grid1 />
                 <Grid1b />
             </>,
@@ -95,6 +109,9 @@ export const App = (props: Props) => {
                 </MenuItem>
                 <MenuItem id="s3" data-sample="3" onClick={handleClose}>
                     3 Draggable Grouping
+                </MenuItem>
+                <MenuItem id="s4" data-sample="4" onClick={handleClose}>
+                    4 Pinned (frozen) Columns/Rows
                 </MenuItem>
             </Menu>
             <AppBar position="static">
@@ -116,8 +133,7 @@ export const App = (props: Props) => {
                 </Toolbar>
             </AppBar>
             <header className="App-header">
-                <h1>Hello From React</h1>
-                {sample}
+                <div className="demo-container">{sample}</div>
             </header>
         </div>
     );

@@ -32,3 +32,8 @@ After yarn install
     add the following: export * from './lib/multiple-select.js';
 
     Very important: remember to do the above if re-installing and/or installing new packages.
+
+Notes:
+
+**Example 04, need to fix/implement autocomplete.**
+
