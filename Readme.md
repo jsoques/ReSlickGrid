@@ -37,3 +37,4 @@ Notes:
 
 **Example 04, need to fix/implement autocomplete.**
 
+**Example 05, had to copy treeData.service.\* from slickgrid-universal/packages/common/dist/commonjs/services/ to node_modules/@slickgrid-universal/common/dist/commonjs/services** 

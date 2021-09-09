@@ -14,6 +14,7 @@ import Grid1b from './components/Grid1b';
 import Grid2 from './components/Grid2';
 import Grid3 from './components/Grid3';
 import Grid4 from './components/Grid4';
+import Grid5 from './components/Grid5';
 
 const useStyles = makeStyles((theme: Theme) =>
     createStyles({
@@ -79,6 +80,13 @@ export const App = (props: Props) => {
                     </>,
                 );
                 break;
+            case 5:
+                setSample(
+                    <>
+                        <Grid5 />
+                    </>,
+                );
+                break;
             default:
                 break;
         }
@@ -113,6 +121,9 @@ export const App = (props: Props) => {
                 <MenuItem id="s4" data-sample="4" onClick={handleClose}>
                     4 Pinned (frozen) Columns/Rows
                 </MenuItem>
+                <MenuItem id="s5" data-sample="5" onClick={handleClose}>
+                    5 Tree Data with Parent/Child refs
+                </MenuItem>
             </Menu>
             <AppBar position="static">
                 <Toolbar>
@@ -133,7 +144,7 @@ export const App = (props: Props) => {
                 </Toolbar>
             </AppBar>
             <header className="App-header">
-                <div className="demo-container">{sample}</div>
+                <div className="demo-container container is-fluid">{sample}</div>
             </header>
         </div>
     );
